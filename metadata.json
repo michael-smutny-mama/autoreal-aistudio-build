@@ -1,0 +1,5 @@
+{
+  "name": "AutoReal – AI Real Estate Listing Generator",
+  "description": "An AI-driven platform that automates the creation of professional real estate listings from photos and property details. It generates descriptions, price estimates, and neighborhood maps to streamline the listing process.",
+  "requestFramePermissions": []
+}
