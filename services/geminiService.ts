@@ -1,5 +1,6 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { FormData, ListingData } from '../types';
+import { parseDataUrl } from '../utils/fileUtils';
 
 const API_KEY = process.env.API_KEY;
 
@@ -82,6 +83,9 @@ export async function generateListing(
           if (formData.propertyType !== previousResult.formData.propertyType) {
               changes.push(`- Typ nemovitosti byl změněn z '${previousResult.formData.propertyType}' na '${formData.propertyType}'.`);
           }
+          if (formData.layout !== previousResult.formData.layout) {
+              changes.push(`- Dispozice byla upravena z '${previousResult.formData.layout || 'neuvedena'}' na '${formData.layout || 'neuvedena'}'.`);
+          }
           if (formData.size !== previousResult.formData.size) {
               changes.push(`- Velikost byla upravena z '${previousResult.formData.size || 'neuvedena'}' na '${formData.size || 'neuvedena'} m²'.`);
           }
@@ -118,6 +122,7 @@ Jsi expert na prodej nemovitostí v České republice. Tvým úkolem je vytvoři
 Poskytnuté informace:
 - Adresa: ${formData.address}
 - Typ nemovitosti: ${formData.propertyType}
+${formData.layout ? `- Dispozice: ${formData.layout}` : ''}
 ${formData.size ? `- Velikost: ${formData.size} m²` : ''}
 ${formData.highlights ? `- Klíčové vlastnosti: ${formData.highlights}` : ''}
 
@@ -191,6 +196,7 @@ Jsi expert na prodej nemovitostí v České republice. Tvým úkolem je napsat n
 Poskytnuté informace:
 - Adresa: ${formData.address}
 - Typ nemovitosti: ${formData.propertyType}
+${formData.layout ? `- Dispozice: ${formData.layout}` : ''}
 ${formData.size ? `- Velikost: ${formData.size} m²` : ''}
 ${formData.highlights ? `- Klíčové vlastnosti: ${formData.highlights}` : ''}
 ${userInstructionsPrompt}
@@ -236,5 +242,45 @@ Vrať odpověď VÝHRADNĚ ve formátu JSON podle zadaného schématu. Nepřidá
     } catch (error) {
         console.error("Error calling Gemini API for description regeneration:", error);
         throw new Error("Failed to regenerate description from AI.");
+    }
+}
+
+export async function stageImage(originalPhotoDataUrl: string): Promise<string> {
+    const model = 'gemini-2.5-flash-image';
+    const { base64, mimeType } = parseDataUrl(originalPhotoDataUrl);
+
+    const imagePart = {
+        inlineData: {
+            data: base64,
+            mimeType: mimeType,
+        },
+    };
+
+    const textPart = {
+        text: 'Proveďte profesionální virtuální home staging na tomto obrázku místnosti. Pokud je místnost prázdná, vybavte ji stylovým, moderním nábytkem. Pokud je již zařízená, vylepšete stávající nábytek a dekorace, aby vypadala co nejatraktivněji pro inzerát s nemovitostí. Výsledkem by měl být realistický, vysoce kvalitní obrázek.',
+    };
+
+    try {
+        const response = await ai.models.generateContent({
+            model: model,
+            contents: { parts: [imagePart, textPart] },
+            config: {
+                responseModalities: [Modality.IMAGE],
+            },
+        });
+        
+        const imageResponsePart = response.candidates?.[0]?.content?.parts?.find(part => part.inlineData && part.inlineData.mimeType.startsWith('image/'));
+
+        if (imageResponsePart?.inlineData) {
+            const base64ImageBytes: string = imageResponsePart.inlineData.data;
+            const responseMimeType: string = imageResponsePart.inlineData.mimeType;
+            return `data:${responseMimeType};base64,${base64ImageBytes}`;
+        }
+
+        throw new Error('V odpovědi od AI nebyla nalezena žádná obrazová data.');
+
+    } catch (error) {
+        console.error("Error calling Gemini API for home staging:", error);
+        throw new Error("Nepodařilo se provést staging obrázku.");
     }
 }

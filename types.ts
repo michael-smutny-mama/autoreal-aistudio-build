@@ -1,8 +1,8 @@
-
 export interface FormData {
   photos: File[];
   address: string;
   propertyType: 'byt' | 'dům' | 'pozemek';
+  layout?: string;
   size?: number;
   highlights?: string;
 }
@@ -23,4 +23,11 @@ export interface ListingData {
     lng: number;
   };
   nearbyPois: PointOfInterest[];
+}
+
+export interface StagedImage {
+  original: string;
+  staged: string | null;
+  isLoading: boolean;
+  error?: string;
 }

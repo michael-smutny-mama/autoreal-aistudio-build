@@ -11,6 +11,7 @@ interface ListingFormProps {
 export const ListingForm: React.FC<ListingFormProps> = ({ onSubmit, disabled, initialData }) => {
   const [address, setAddress] = useState(initialData?.address || '');
   const [propertyType, setPropertyType] = useState<'byt' | 'dům' | 'pozemek'>(initialData?.propertyType || 'byt');
+  const [layout, setLayout] = useState(initialData?.layout || '');
   const [size, setSize] = useState<string>(initialData?.size?.toString() || '');
   const [highlights, setHighlights] = useState(initialData?.highlights || '');
   const [photos, setPhotos] = useState<File[]>(initialData?.photos || []);
@@ -64,10 +65,11 @@ export const ListingForm: React.FC<ListingFormProps> = ({ onSubmit, disabled, in
       photos,
       address,
       propertyType,
+      layout,
       size: size ? parseFloat(size) : undefined,
       highlights,
     });
-  }, [photos, address, propertyType, size, highlights, onSubmit]);
+  }, [photos, address, propertyType, layout, size, highlights, onSubmit]);
 
   return (
     <div className="max-w-4xl mx-auto bg-white p-6 md:p-10 rounded-2xl shadow-lg">
@@ -133,6 +135,33 @@ export const ListingForm: React.FC<ListingFormProps> = ({ onSubmit, disabled, in
             </div>
           </div>
         </div>
+
+        {(propertyType === 'byt' || propertyType === 'dům') && (
+          <div>
+            <label htmlFor="layout" className="font-bold text-slate-700">Dispozice (volitelné)</label>
+            <select 
+              id="layout" 
+              value={layout} 
+              onChange={e => setLayout(e.target.value)} 
+              className="mt-2 w-full p-3 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+            >
+              <option value="">Vyberte dispozici</option>
+              <option value="1+kk">1+kk</option>
+              <option value="1+1">1+1</option>
+              <option value="2+kk">2+kk</option>
+              <option value="2+1">2+1</option>
+              <option value="3+kk">3+kk</option>
+              <option value="3+1">3+1</option>
+              <option value="4+kk">4+kk</option>
+              <option value="4+1">4+1</option>
+              <option value="5+kk">5+kk</option>
+              <option value="5+1 a větší">5+1 a větší</option>
+              <option value="atypický">Atypický</option>
+              <option value="mezonet">Mezonet</option>
+              <option value="ateliér">Ateliér</option>
+            </select>
+          </div>
+        )}
 
         <div>
           <label htmlFor="highlights" className="font-bold text-slate-700">Klíčové vlastnosti (volitelné)</label>

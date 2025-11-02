@@ -1,17 +1,19 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { ListingData } from '../types';
+import { FormData, ListingData, StagedImage } from '../types';
 import { MapComponent } from './Map';
 import { AreaIcon } from './icons/AreaIcon';
 import { BedIcon } from './icons/BedIcon';
 import { DownloadIcon } from './icons/DownloadIcon';
-import { ShareIcon } from './icons/ShareIcon';
 import { ArrowLeftIcon } from './icons/ArrowLeftIcon';
 import { ArrowRightIcon } from './icons/ArrowRightIcon';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { PencilIcon } from './icons/PencilIcon';
+import { LayoutIcon } from './icons/LayoutIcon';
+import { stageImage } from '../services/geminiService';
 
 interface ListingResultProps {
   data: ListingData;
+  formData: FormData;
   photos: string[];
   onReset: () => void;
   onEdit: () => void;
@@ -52,7 +54,7 @@ const ImageCarousel: React.FC<{ photos: string[] }> = ({ photos }) => {
     );
 };
 
-export const ListingResult: React.FC<ListingResultProps> = ({ data, photos, onReset, onEdit, onRegenerateDescription, isRegenerating }) => {
+export const ListingResult: React.FC<ListingResultProps> = ({ data, formData, photos, onReset, onEdit, onRegenerateDescription, isRegenerating }) => {
   const [isExporting, setIsExporting] = useState(false);
   const [isTextEditing, setIsTextEditing] = useState(false);
   const [editableTitle, setEditableTitle] = useState(data.title);
@@ -60,10 +62,15 @@ export const ListingResult: React.FC<ListingResultProps> = ({ data, photos, onRe
   const [isRegenModalOpen, setIsRegenModalOpen] = useState(false);
   const [regenInstructions, setRegenInstructions] = useState('');
   
+  const [isStagingModalOpen, setIsStagingModalOpen] = useState(false);
+  const [selectedPhotosForStaging, setSelectedPhotosForStaging] = useState<Set<number>>(new Set());
+  const [stagedImages, setStagedImages] = useState<StagedImage[]>([]);
+  const [stagingError, setStagingError] = useState<string | null>(null);
+  const [isStaging, setIsStaging] = useState(false);
+
   const listingRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Only update from props if not currently editing
     if (!isTextEditing) {
       setEditableTitle(data.title);
       setEditableDescription(data.description);
@@ -112,9 +119,7 @@ export const ListingResult: React.FC<ListingResultProps> = ({ data, photos, onRe
     setEditableDescription(data.description);
   };
 
-  const handleRegenerateClick = () => {
-    setIsRegenModalOpen(true);
-  };
+  const handleRegenerateClick = () => setIsRegenModalOpen(true);
   
   const handleConfirmRegeneration = () => {
     if (isRegenerating) return;
@@ -126,6 +131,55 @@ export const ListingResult: React.FC<ListingResultProps> = ({ data, photos, onRe
   const handleCancelRegeneration = () => {
     setIsRegenModalOpen(false);
     setRegenInstructions('');
+  };
+
+  const handleTogglePhotoSelection = (index: number) => {
+    setSelectedPhotosForStaging(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(index)) {
+            newSet.delete(index);
+        } else {
+            newSet.add(index);
+        }
+        return newSet;
+    });
+  };
+
+  const handleStartStaging = async () => {
+      if (selectedPhotosForStaging.size === 0) return;
+      setIsStagingModalOpen(false);
+      setIsStaging(true);
+      setStagingError(null);
+
+      const initialStagedImages: StagedImage[] = Array.from(selectedPhotosForStaging).map(index => ({
+          original: photos[index],
+          staged: null,
+          isLoading: true,
+      }));
+      setStagedImages(initialStagedImages);
+
+      const stagingPromises = initialStagedImages.map(async (image, arrayIndex) => {
+          try {
+              const stagedDataUrl = await stageImage(image.original);
+              setStagedImages(prev => {
+                  const newImages = [...prev];
+                  newImages[arrayIndex] = { ...newImages[arrayIndex], staged: stagedDataUrl, isLoading: false };
+                  return newImages;
+              });
+          } catch (error) {
+              console.error(`Staging failed for image ${arrayIndex}:`, error);
+              setStagedImages(prev => {
+                  const newImages = [...prev];
+                  newImages[arrayIndex] = { ...newImages[arrayIndex], isLoading: false, error: 'Nepodařilo se vylepšit.' };
+                  return newImages;
+              });
+              setStagingError('Při vylepšování některých obrázků došlo k chybě.');
+          }
+      });
+
+      await Promise.all(stagingPromises);
+      setIsStaging(false);
+      setSelectedPhotosForStaging(new Set());
   };
 
   return (
@@ -208,20 +262,48 @@ export const ListingResult: React.FC<ListingResultProps> = ({ data, photos, onRe
                       <MapComponent center={data.location} property={data.location} pois={data.nearbyPois} />
                   </div>
                   
-                  {/* AI Home Staging Placeholder */}
                   <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl">
-                      <h3 className="text-2xl font-bold mb-2 flex items-center gap-2"><SparklesIcon className="w-6 h-6 text-blue-500" /> AI Home Staging <span className="text-sm bg-blue-500 text-white font-bold px-2 py-0.5 rounded-full">Brzy</span></h3>
-                      <p className="text-slate-600 mb-4">Vylepšete své fotky s naší AI. Zvyšte atraktivitu a prodejní cenu vaší nemovitosti.</p>
-                      <div className="grid grid-cols-2 gap-4">
-                          <div>
-                              <img src="https://picsum.photos/seed/before/400/300" alt="Před" className="rounded-lg shadow-md"/>
-                              <p className="text-center font-semibold mt-2 text-slate-700">Před</p>
+                      <h3 className="text-2xl font-bold mb-2 flex items-center gap-2"><SparklesIcon className="w-6 h-6 text-blue-500" /> AI Home Staging</h3>
+                      
+                      {stagedImages.length === 0 && !isStaging && (
+                        <>
+                          <p className="text-slate-600 mb-4">Vylepšete své fotky s naší AI. Zvyšte atraktivitu a prodejní cenu vaší nemovitosti.</p>
+                          <button onClick={() => setIsStagingModalOpen(true)} className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition">Vylepšit fotky s AI</button>
+                        </>
+                      )}
+
+                      {isStaging && (
+                          <div className="text-center">
+                              <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                              <p className="text-slate-600">Provádím AI staging... To může chvíli trvat.</p>
                           </div>
-                          <div>
-                              <img src="https://picsum.photos/seed/after/400/300" alt="Po" className="rounded-lg shadow-md"/>
-                              <p className="text-center font-semibold mt-2 text-slate-700">Po</p>
+                      )}
+                      
+                      {stagingError && <p className="text-red-500 mt-4">{stagingError}</p>}
+                      
+                      {stagedImages.length > 0 && (
+                          <div className="mt-4">
+                            <p className="text-slate-600 mb-4">Prohlédněte si vylepšené fotografie.</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {stagedImages.map((image, index) => (
+                                    <div key={index} className="space-y-2">
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <img src={image.original} alt="Před" className="rounded-lg shadow-md aspect-video object-cover"/>
+                                                <p className="text-center font-semibold mt-2 text-slate-700 text-sm">Před</p>
+                                            </div>
+                                            <div className="flex items-center justify-center">
+                                                {image.isLoading && <div className="w-8 h-8 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>}
+                                                {image.error && <div className="text-center text-red-500 text-sm p-2 bg-red-50 rounded-lg">{image.error}</div>}
+                                                {image.staged && <img src={image.staged} alt="Po" className="rounded-lg shadow-md aspect-video object-cover"/>}
+                                            </div>
+                                        </div>
+                                         {image.staged && <p className="text-center font-semibold mt-2 text-slate-700 text-sm">Po</p>}
+                                    </div>
+                                ))}
+                            </div>
                           </div>
-                      </div>
+                      )}
                   </div>
               </div>
 
@@ -234,8 +316,24 @@ export const ListingResult: React.FC<ListingResultProps> = ({ data, photos, onRe
                       <div className="mt-8 pt-6 border-t">
                           <h4 className="font-bold text-lg mb-4">Základní informace</h4>
                           <ul className="space-y-3 text-slate-600">
-                            <li className="flex items-center gap-3"><BedIcon className="w-6 h-6 text-blue-500"/> <span>Typ: <span className="font-semibold text-slate-800">Dům/Byt</span></span></li>
-                            <li className="flex items-center gap-3"><AreaIcon className="w-6 h-6 text-blue-500"/> <span>Plocha: <span className="font-semibold text-slate-800">75 m²</span></span></li>
+                            <li className="flex items-center gap-3">
+                              <BedIcon className="w-6 h-6 text-blue-500"/>
+                              <span>Typ: <span className="font-semibold text-slate-800">{
+                                { 'byt': 'Byt', 'dům': 'Dům', 'pozemek': 'Pozemek' }[formData.propertyType]
+                              }</span></span>
+                            </li>
+                            {(formData.propertyType === 'byt' || formData.propertyType === 'dům') && formData.layout && (
+                              <li className="flex items-center gap-3">
+                                <LayoutIcon className="w-6 h-6 text-blue-500"/> 
+                                <span>Dispozice: <span className="font-semibold text-slate-800">{formData.layout}</span></span>
+                              </li>
+                            )}
+                            {formData.size && (
+                              <li className="flex items-center gap-3">
+                                <AreaIcon className="w-6 h-6 text-blue-500"/>
+                                <span>Plocha: <span className="font-semibold text-slate-800">{formData.size} m²</span></span>
+                              </li>
+                            )}
                           </ul>
                       </div>
                   </div>
@@ -271,6 +369,41 @@ export const ListingResult: React.FC<ListingResultProps> = ({ data, photos, onRe
                 disabled={isRegenerating}
               >
                 {isRegenerating ? 'Generuji...' : 'Vygenerovat'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isStagingModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-xl p-8 max-w-4xl w-full m-4">
+            <h3 className="text-2xl font-bold mb-4">Vyberte fotografie pro AI Home Staging</h3>
+            <p className="text-slate-600 mb-6">Kliknutím vyberte fotografie, které chcete vylepšit. AI se pokusí je zařídit nebo vylepšit jejich vzhled.</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-h-[50vh] overflow-y-auto pr-2">
+              {photos.map((photo, index) => (
+                <div key={index} className="relative cursor-pointer group" onClick={() => handleTogglePhotoSelection(index)}>
+                    <img src={photo} alt={`Fotografie ${index + 1}`} className={`w-full h-32 object-cover rounded-lg transition-all ${selectedPhotosForStaging.has(index) ? 'ring-4 ring-blue-500' : ''}`} />
+                    <div className={`absolute inset-0 bg-black transition-opacity rounded-lg ${selectedPhotosForStaging.has(index) ? 'bg-opacity-30' : 'bg-opacity-0 group-hover:bg-opacity-10'}`}></div>
+                    <div className={`absolute top-2 right-2 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${selectedPhotosForStaging.has(index) ? 'bg-blue-500 border-blue-500' : 'bg-white/50 border-slate-400'}`}>
+                      {selectedPhotosForStaging.has(index) && <span className="text-white">✔</span>}
+                    </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-4 mt-8">
+              <button
+                onClick={() => setIsStagingModalOpen(false)}
+                className="bg-white border border-slate-300 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-100 transition"
+              >
+                Zrušit
+              </button>
+              <button
+                onClick={handleStartStaging}
+                className="bg-blue-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-blue-700 transition disabled:bg-slate-400"
+                disabled={selectedPhotosForStaging.size === 0}
+              >
+                Zahájit home staging ({selectedPhotosForStaging.size})
               </button>
             </div>
           </div>

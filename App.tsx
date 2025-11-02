@@ -103,7 +103,8 @@ function App() {
     if (listingData) {
       return (
         <ListingResult 
-          data={listingData} 
+          data={listingData}
+          formData={submittedFormData!} 
           photos={photos} 
           onReset={handleReset} 
           onEdit={handleEdit}
