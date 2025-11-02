@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, ChangeEvent, FormEvent, DragEvent } from 'react';
 import { FormData } from '../types';
 import { UploadIcon } from './icons/UploadIcon';
@@ -72,10 +71,14 @@ export const ListingForm: React.FC<ListingFormProps> = ({ onSubmit, disabled, in
 
   return (
     <div className="max-w-4xl mx-auto bg-white p-6 md:p-10 rounded-2xl shadow-lg">
-      <h2 className="text-3xl font-bold text-center mb-2">Vytvořte inzerát během minuty</h2>
-      <p className="text-center text-slate-600 mb-8">
-        Zadejte základní údaje a naše AI se postará o zbytek.
-      </p>
+      <div className="text-center mb-10">
+        <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 to-indigo-500 bg-clip-text text-transparent pb-2">
+          Vytvořte inzerát během minuty
+        </h2>
+        <p className="mt-2 text-lg text-slate-600">
+          Zadejte základní údaje a naše AI se postará o zbytek.
+        </p>
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
         <div>
@@ -110,13 +113,13 @@ export const ListingForm: React.FC<ListingFormProps> = ({ onSubmit, disabled, in
 
         <div>
           <label htmlFor="address" className="font-bold text-slate-700">Adresa <span className="text-red-500">*</span></label>
-          <input id="address" type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="Např. Václavské náměstí 1, Praha" required className="mt-2 w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"/>
+          <input id="address" type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="Např. Václavské náměstí 1, Praha" required className="mt-2 w-full p-3 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"/>
         </div>
 
         <div className="grid md:grid-cols-2 gap-6">
           <div>
             <label htmlFor="propertyType" className="font-bold text-slate-700">Typ nemovitosti <span className="text-red-500">*</span></label>
-            <select id="propertyType" value={propertyType} onChange={e => setPropertyType(e.target.value as any)} className="mt-2 w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+            <select id="propertyType" value={propertyType} onChange={e => setPropertyType(e.target.value as any)} className="mt-2 w-full p-3 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
               <option value="byt">Byt</option>
               <option value="dům">Dům</option>
               <option value="pozemek">Pozemek</option>
@@ -125,7 +128,7 @@ export const ListingForm: React.FC<ListingFormProps> = ({ onSubmit, disabled, in
           <div>
             <label htmlFor="size" className="font-bold text-slate-700">Velikost (volitelné)</label>
             <div className="relative mt-2">
-              <input id="size" type="number" value={size} onChange={e => setSize(e.target.value)} placeholder="Např. 75" className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"/>
+              <input id="size" type="number" value={size} onChange={e => setSize(e.target.value)} placeholder="Např. 75" className="w-full p-3 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"/>
               <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm text-slate-500">m²</span>
             </div>
           </div>
@@ -134,7 +137,7 @@ export const ListingForm: React.FC<ListingFormProps> = ({ onSubmit, disabled, in
         <div>
           <label htmlFor="highlights" className="font-bold text-slate-700">Klíčové vlastnosti (volitelné)</label>
           <p className="text-sm text-slate-500 mb-2">Co dělá vaši nemovitost jedinečnou? (např. "nově zrekonstruovaná kuchyně, klidná ulice, velký balkon")</p>
-          <textarea id="highlights" value={highlights} onChange={e => setHighlights(e.target.value)} rows={3} placeholder="Oddělujte čárkou..." className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"></textarea>
+          <textarea id="highlights" value={highlights} onChange={e => setHighlights(e.target.value)} rows={3} placeholder="Oddělujte čárkou..." className="w-full p-3 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"></textarea>
         </div>
 
         {error && <p className="text-red-500 text-center">{error}</p>}
