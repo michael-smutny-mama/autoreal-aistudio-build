@@ -6,14 +6,15 @@ import { UploadIcon } from './icons/UploadIcon';
 interface ListingFormProps {
   onSubmit: (data: FormData) => void;
   disabled: boolean;
+  initialData?: FormData | null;
 }
 
-export const ListingForm: React.FC<ListingFormProps> = ({ onSubmit, disabled }) => {
-  const [address, setAddress] = useState('');
-  const [propertyType, setPropertyType] = useState<'byt' | 'dům' | 'pozemek'>('byt');
-  const [size, setSize] = useState<string>('');
-  const [highlights, setHighlights] = useState('');
-  const [photos, setPhotos] = useState<File[]>([]);
+export const ListingForm: React.FC<ListingFormProps> = ({ onSubmit, disabled, initialData }) => {
+  const [address, setAddress] = useState(initialData?.address || '');
+  const [propertyType, setPropertyType] = useState<'byt' | 'dům' | 'pozemek'>(initialData?.propertyType || 'byt');
+  const [size, setSize] = useState<string>(initialData?.size?.toString() || '');
+  const [highlights, setHighlights] = useState(initialData?.highlights || '');
+  const [photos, setPhotos] = useState<File[]>(initialData?.photos || []);
   const [error, setError] = useState<string>('');
   const [isDragging, setIsDragging] = useState(false);
 

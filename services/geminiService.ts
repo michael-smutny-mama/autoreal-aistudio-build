@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { FormData, ListingData } from '../types';
 
@@ -41,11 +40,79 @@ const responseSchema = {
     required: ['title', 'description', 'estimatedPrice', 'location', 'nearbyPois']
 };
 
+const filesAreEqual = (file1: File, file2: File) => {
+    return file1.name === file2.name &&
+           file1.size === file2.size &&
+           file1.lastModified === file2.lastModified;
+};
 
-export async function generateListing(formData: FormData, photoBase64s: string[], mimeTypes: string[]): Promise<ListingData> {
+const photoArraysAreEqual = (arr1: File[], arr2: File[]) => {
+    if (arr1.length !== arr2.length) return false;
+    const sortedArr1 = [...arr1].sort((a, b) => a.name.localeCompare(b.name));
+    const sortedArr2 = [...arr2].sort((a, b) => a.name.localeCompare(b.name));
+    
+    for (let i = 0; i < sortedArr1.length; i++) {
+        if (!filesAreEqual(sortedArr1[i], sortedArr2[i])) return false;
+    }
+    return true;
+};
+
+export async function generateListing(
+    formData: FormData, 
+    photoBase64s: string[], 
+    mimeTypes: string[], 
+    previousResult?: { formData: FormData; listingData: ListingData; } | null
+): Promise<ListingData> {
   const model = "gemini-2.5-flash";
   
-  const textPrompt = `
+  let textPrompt: string;
+  let parts: any[];
+  let requiresImageAnalysis = true;
+  let keepLocationData = false;
+  
+  if (previousResult) {
+      const photosChanged = !photoArraysAreEqual(formData.photos, previousResult.formData.photos);
+      const addressChanged = formData.address !== previousResult.formData.address;
+
+      if (!photosChanged && !addressChanged) {
+          requiresImageAnalysis = false;
+          keepLocationData = true;
+
+          const changes: string[] = [];
+          if (formData.propertyType !== previousResult.formData.propertyType) {
+              changes.push(`- Typ nemovitosti byl změněn z '${previousResult.formData.propertyType}' na '${formData.propertyType}'.`);
+          }
+          if (formData.size !== previousResult.formData.size) {
+              changes.push(`- Velikost byla upravena z '${previousResult.formData.size || 'neuvedena'}' na '${formData.size || 'neuvedena'} m²'.`);
+          }
+          if (formData.highlights !== previousResult.formData.highlights) {
+              changes.push(`- Klíčové vlastnosti byly upraveny na: '${formData.highlights || 'Žádné'}'. Původní: '${previousResult.formData.highlights || 'Žádné'}'.`);
+          }
+
+          textPrompt = `Jsi expert na prodej nemovitostí v České republice. Tvým úkolem je upravit existující inzerát na základě změn od uživatele. Vrať odpověď VÝHRADNĚ ve formátu JSON podle zadaného schématu. Nepřidávej žádné další formátování jako markdown.
+
+Původní inzerát:
+- Titulek: ${previousResult.listingData.title}
+- Popis: ${previousResult.listingData.description}
+- Odhadovaná cena: ${previousResult.listingData.estimatedPrice} CZK
+- Adresa: ${formData.address}
+
+Uživatelem provedené změny:
+${changes.length > 0 ? changes.join('\n') : 'Žádné textové změny nebyly provedeny.'}
+
+Na základě těchto změn:
+1.  **title**: Mírně uprav titulek, pokud je to relevantní ke změnám. Jinak ponech původní.
+2.  **description**: Vylepši existující popis, aby reflektoval nové informace. Zachovej strukturu a tón.
+3.  **estimatedPrice**: Přepočítej odhadovanou cenu na základě nových informací (zejména změny velikosti).
+4.  **location**: POUŽIJ PŮVODNÍ DATA. Neměň zeměpisnou šířku a délku.
+5.  **nearbyPois**: POUŽIJ PŮVODNÍ DATA. Neměň seznam zajímavých míst.
+
+Vrať kompletní JSON objekt, včetně nezměněných 'location' a 'nearbyPois' dat z PŮVODNÍHO inzerátu.`;
+      }
+  }
+
+  if (requiresImageAnalysis) {
+      textPrompt = `
 Jsi expert na prodej nemovitostí v České republice. Tvým úkolem je vytvořit profesionální inzerát na základě poskytnutých informací a fotografií. Vrať odpověď VÝHRADNĚ ve formátu JSON podle zadaného schématu. Nepřidávej žádné další formátování jako markdown.
 
 Poskytnuté informace:
@@ -61,15 +128,19 @@ Na základě těchto informací a přiložených fotografií vygeneruj následuj
 4.  **location**: Objekt obsahující přesnou zeměpisnou šířku a délku dané adresy.
 5.  **nearbyPois**: Pole 5-7 zajímavých míst v okolí (např. park, škola, obchod, restaurace, zastávka MHD).
 `;
-
-  const imageParts = photoBase64s.map((base64, index) => ({
-    inlineData: {
-      data: base64,
-      mimeType: mimeTypes[index],
-    }
-  }));
-
-  const parts = [{ text: textPrompt }, ...imageParts];
+  }
+  
+  if (requiresImageAnalysis) {
+    const imageParts = photoBase64s.map((base64, index) => ({
+      inlineData: {
+        data: base64,
+        mimeType: mimeTypes[index],
+      }
+    }));
+    parts = [{ text: textPrompt }, ...imageParts];
+  } else {
+    parts = [{ text: textPrompt }];
+  }
 
   try {
     const response = await ai.models.generateContent({
@@ -83,7 +154,12 @@ Na základě těchto informací a přiložených fotografií vygeneruj následuj
     });
     
     const jsonText = response.text.trim();
-    const parsedData = JSON.parse(jsonText) as ListingData;
+    let parsedData = JSON.parse(jsonText) as ListingData;
+    
+    if (keepLocationData && previousResult) {
+        parsedData.location = previousResult.listingData.location;
+        parsedData.nearbyPois = previousResult.listingData.nearbyPois;
+    }
     
     return parsedData;
 
@@ -91,4 +167,74 @@ Na základě těchto informací a přiložených fotografií vygeneruj následuj
     console.error("Error calling Gemini API:", error);
     throw new Error("Failed to generate listing from AI.");
   }
+}
+
+
+export async function regenerateDescription(
+    formData: FormData,
+    photoBase64s: string[],
+    mimeTypes: string[],
+    instructions: string
+): Promise<string> {
+    const model = "gemini-2.5-flash";
+
+    const userInstructionsPrompt = instructions.trim()
+    ? `
+Uživatel poskytl následující dodatečné instrukce. DŮSLEDNĚ se jimi řiď:
+"${instructions}"
+`
+    : '';
+
+    const textPrompt = `
+Jsi expert na prodej nemovitostí v České republice. Tvým úkolem je napsat nový, kreativní popis pro nemovitost na základě poskytnutých informací, fotografií a případných instrukcí od uživatele. Soustřeď se POUZE na text popisu.
+
+Poskytnuté informace:
+- Adresa: ${formData.address}
+- Typ nemovitosti: ${formData.propertyType}
+${formData.size ? `- Velikost: ${formData.size} m²` : ''}
+${formData.highlights ? `- Klíčové vlastnosti: ${formData.highlights}` : ''}
+${userInstructionsPrompt}
+
+Na základě těchto informací a přiložených fotografií vygeneruj POUZE nový 'description'.
+1.  **description**: Detailní a přesvědčivý popis nemovitosti v češtině. Zkus jiný úhel pohledu než předtím a zapracuj instrukce od uživatele, pokud byly poskytnuty. Popis by měl být členěn do několika odstavců pro lepší čitelnost.
+
+Vrať odpověď VÝHRADNĚ ve formátu JSON podle zadaného schématu. Nepřidávej žádné další formátování jako markdown.
+`;
+
+    const imageParts = photoBase64s.map((base64, index) => ({
+      inlineData: {
+        data: base64,
+        mimeType: mimeTypes[index],
+      }
+    }));
+    
+    const parts = [{ text: textPrompt }, ...imageParts];
+    
+    const regenerationSchema = {
+        type: Type.OBJECT,
+        properties: {
+            description: { type: Type.STRING, description: 'Nový detailní a přesvědčivý popis nemovitosti.' },
+        },
+        required: ['description']
+    };
+
+    try {
+        const response = await ai.models.generateContent({
+            model: model,
+            contents: { parts: parts },
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: regenerationSchema,
+                temperature: 0.7,
+            }
+        });
+
+        const jsonText = response.text.trim();
+        const parsedData = JSON.parse(jsonText) as { description: string };
+        return parsedData.description;
+
+    } catch (error) {
+        console.error("Error calling Gemini API for description regeneration:", error);
+        throw new Error("Failed to regenerate description from AI.");
+    }
 }
